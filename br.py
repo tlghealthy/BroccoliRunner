@@ -3,9 +3,35 @@ with open("settings.json") as f: settings = json.load(f)
 pygame.init()
 screen = pygame.display.set_mode((settings["screen_width"], settings["screen_height"]))
 clock = pygame.time.Clock()
-font = pygame.font.SysFont(None, 24)
 
-# Control flash tracking: each control is displayed until used, then stays for 3 sec and vanishes.
+# Helper to draw text using settings properties.
+def draw_text(key, text, color=(255,255,255)):
+    props = settings["text"][key]
+    font_obj = pygame.font.SysFont(None, props["scale"])
+    surf = font_obj.render(text, True, color)
+    pos = props["pos"]
+    if props.get("center"):
+        pos = (pos[0] - surf.get_width()//2, pos[1] - surf.get_height()//2)
+    screen.blit(surf, pos)
+
+# Load sprite helper: scales to default_size if provided.
+def load_sprite(key, default_size=None):
+    path = settings.get(key, "")
+    if path:
+        try:
+            img = pygame.image.load(path)
+            if default_size: img = pygame.transform.scale(img, default_size)
+            return img
+        except:
+            return None
+    return None
+
+player_sprite = load_sprite("player_sprite", tuple(settings["player_size"]))
+obstacle_sprite = load_sprite("obstacle_sprite")
+healthy_sprite = load_sprite("healthy_sprite")
+unhealthy_sprite = load_sprite("unhealthy_sprite")
+
+# Track control flash usage: once used, show for 3 seconds then hide.
 controls_flash = {"jump": None, "left": None, "right": None}
 controls_display = {"jump": True, "left": True, "right": True}
 
@@ -35,37 +61,24 @@ def start_screen():
             if event.type==pygame.KEYDOWN and event.key==pygame.K_SPACE:
                 return
         screen.fill(settings["bg_color"])
-        title = font.render("Broccoli Runner!", True, (255,255,255))
-        prompt = font.render("Press spacebar to start", True, (255,255,255))
-        screen.blit(title, ((settings["screen_width"]-title.get_width())//2, 100))
-        screen.blit(prompt, ((settings["screen_width"]-prompt.get_width())//2, 150))
-        # Show control hints until they are used
-        if controls_display["jump"]:
-            txt = font.render("Jump: Spacebar", True, (255,255,255))
-            screen.blit(txt, (100, 250))
-        if controls_display["left"]:
-            txt = font.render("Move Left: Left Arrow", True, (255,255,255))
-            screen.blit(txt, (100, 280))
-        if controls_display["right"]:
-            txt = font.render("Move Right: Right Arrow", True, (255,255,255))
-            screen.blit(txt, (100, 310))
+        draw_text("start_title", "Broccoli Runner!")
+        draw_text("start_prompt", "Press spacebar to start")
+        if controls_display["jump"]: draw_text("control_jump", "Jump: Spacebar")
+        if controls_display["left"]: draw_text("control_left", "Move Left: Left Arrow")
+        if controls_display["right"]: draw_text("control_right", "Move Right: Right Arrow")
         pygame.display.flip()
         clock.tick(settings["fps"])
 
 def level_loading(level, player):
-    # Countdown from 3 to 1, displaying level and current health.
     for count in range(3, 0, -1):
         start_time = pygame.time.get_ticks()
         while pygame.time.get_ticks()-start_time < 1000:
             for event in pygame.event.get():
                 if event.type==pygame.QUIT: pygame.quit(); sys.exit()
             screen.fill(settings["bg_color"])
-            lvl_txt = font.render(f"Level {level+1}", True, (255,255,255))
-            count_txt = font.render(f"Starting in {count} seconds", True, (255,255,255))
-            health_txt = font.render(f"Health: {player.health}", True, (255,255,255))
-            screen.blit(lvl_txt, ((settings["screen_width"]-lvl_txt.get_width())//2, 100))
-            screen.blit(count_txt, ((settings["screen_width"]-count_txt.get_width())//2, 150))
-            screen.blit(health_txt, ((settings["screen_width"]-health_txt.get_width())//2, 200))
+            draw_text("level_title", f"Level {level+1}")
+            draw_text("level_countdown", f"Starting in {count} seconds")
+            draw_text("level_health", f"Health: {player.health}")
             pygame.display.flip()
             clock.tick(settings["fps"])
 
@@ -76,7 +89,7 @@ def run_level(level, player):
     item_rate = settings["item_spawn_rate"] + level * settings["item_rate_increase"]
     progress = 0; obstacles = []; items = []
     while progress < lvl_len and player.health > 0:
-        dt = clock.tick(settings["fps"]); progress += speed
+        clock.tick(settings["fps"]); progress += speed
         for event in pygame.event.get():
             if event.type==pygame.QUIT: pygame.quit(); sys.exit()
             if event.type==pygame.KEYDOWN:
@@ -84,7 +97,6 @@ def run_level(level, player):
                     player.jump()
                     if controls_display["jump"] and controls_flash["jump"] is None:
                         controls_flash["jump"] = pygame.time.get_ticks()
-        # Handle left/right movement continuously
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
             player.rect.x -= settings["ground_control"] if player.rect.bottom>=settings["screen_height"] else settings["air_control"]
@@ -94,27 +106,23 @@ def run_level(level, player):
             player.rect.x += settings["ground_control"] if player.rect.bottom>=settings["screen_height"] else settings["air_control"]
             if controls_display["right"] and controls_flash["right"] is None:
                 controls_flash["right"] = pygame.time.get_ticks()
-        # Update control flashes (hide after 3 seconds)
         now = pygame.time.get_ticks()
         for k in controls_flash:
             if controls_flash[k] is not None and now-controls_flash[k]>3000:
                 controls_display[k] = False
-        # Spawn obstacles & items
         if random.random() < obst_rate:
             w, h = random.randint(20,70), random.randint(20,70)
             obstacles.append(pygame.Rect(settings["screen_width"], settings["screen_height"]-h, w, h))
         if random.random() < item_rate:
-            typ = "healthy" if random.random() < 0.5 else "unhealthy"
+            typ = "healthy" if random.random()<0.5 else "unhealthy"
             items.append({"rect": pygame.Rect(settings["screen_width"], random.randint(settings["screen_height"]-200, settings["screen_height"]-50), 20, 20), "type": typ})
         obstacles = [o.move(-speed,0) for o in obstacles if o.right>0]
         for i in items: i["rect"].x -= speed
         items = [i for i in items if i["rect"].right>0]
         player.update()
-        # Collision with obstacles (if not invulnerable)
         if not player.is_invuln() and any(player.rect.colliderect(o) for o in obstacles):
             player.health -= settings["health_loss"]
             player.invuln_timer = pygame.time.get_ticks()+settings["invuln_time"]
-        # Collision with items (adjust regen)
         new_items = []
         for i in items:
             if player.rect.colliderect(i["rect"]):
@@ -125,24 +133,33 @@ def run_level(level, player):
             else:
                 new_items.append(i)
         items = new_items
-        # Drawing
         screen.fill(settings["bg_color"])
-        for o in obstacles: pygame.draw.rect(screen, settings["obstacle_color"], o)
+        for o in obstacles:
+            if obstacle_sprite:
+                spr = pygame.transform.scale(obstacle_sprite, (o.width, o.height))
+                screen.blit(spr, o.topleft)
+            else:
+                pygame.draw.rect(screen, settings["obstacle_color"], o)
         for i in items:
             col = settings["healthy_color"] if i["type"]=="healthy" else settings["unhealthy_color"]
-            pygame.draw.rect(screen, col, i["rect"])
+            sprite = healthy_sprite if i["type"]=="healthy" else unhealthy_sprite
+            if sprite:
+                spr = pygame.transform.scale(sprite, (i["rect"].width, i["rect"].height))
+                screen.blit(spr, i["rect"].topleft)
+            else:
+                pygame.draw.rect(screen, col, i["rect"])
         if not (player.is_invuln() and (pygame.time.get_ticks()//200)%2==0):
-            pygame.draw.rect(screen, settings["player_color"], player.rect)
-        hud = font.render(f'Lvl {level+1}  Health: {player.health}  Regen: {player.regen}', True, (255,255,255))
+            if player_sprite:
+                screen.blit(player_sprite, player.rect)
+            else:
+                pygame.draw.rect(screen, settings["player_color"], player.rect)
+        # In-game HUD (kept simple)
+        hud_font = pygame.font.SysFont(None, 24)
+        hud = hud_font.render(f'Lvl {level+1}  Health: {player.health}  Regen: {player.regen}', True, (255,255,255))
         screen.blit(hud, (10,10))
-        # Show control hints if still active
-        y = 40
-        if controls_display["jump"]:
-            txt = font.render("Jump: Spacebar", True, (255,255,255)); screen.blit(txt, (10,y)); y+=20
-        if controls_display["left"]:
-            txt = font.render("Left: Arrow", True, (255,255,255)); screen.blit(txt, (10,y)); y+=20
-        if controls_display["right"]:
-            txt = font.render("Right: Arrow", True, (255,255,255)); screen.blit(txt, (10,y)); y+=20
+        if controls_display["jump"]: draw_text("control_jump", "Jump: Spacebar")
+        if controls_display["left"]: draw_text("control_left", "Left: Arrow")
+        if controls_display["right"]: draw_text("control_right", "Right: Arrow")
         pygame.display.flip()
     player.health += player.regen
 
@@ -157,7 +174,6 @@ while True:
     for event in pygame.event.get():
         if event.type==pygame.QUIT: pygame.quit(); sys.exit()
     screen.fill(settings["bg_color"])
-    text = font.render(msg, True, (255,255,255))
-    screen.blit(text, ((settings["screen_width"]-text.get_width())//2, (settings["screen_height"]-text.get_height())//2))
+    draw_text("end_message", msg)
     pygame.display.flip()
     clock.tick(settings["fps"])

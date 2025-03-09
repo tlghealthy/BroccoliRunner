@@ -25,6 +25,21 @@
     "item_rate_increase": 0.001,
     "health_loss": 10,
     "health_regen": 5,
-    "initial_health": 100
+    "initial_health": 100,
+    "player_sprite": "assets/sprites/broccoli.png",
+    "obstacle_sprite": "assets/obstacle.png",
+    "healthy_sprite": "assets/healthy.png",
+    "unhealthy_sprite": "assets/unhealthy.png",
+    "text": {
+      "start_title": {"pos": [400, 100], "scale": 48, "center": true},
+      "start_prompt": {"pos": [400, 150], "scale": 24, "center": true},
+      "control_jump": {"pos": [100, 250], "scale": 20, "center": false},
+      "control_left": {"pos": [100, 280], "scale": 20, "center": false},
+      "control_right": {"pos": [100, 310], "scale": 20, "center": false},
+      "level_title": {"pos": [400, 100], "scale": 36, "center": true},
+      "level_countdown": {"pos": [400, 150], "scale": 24, "center": true},
+      "level_health": {"pos": [400, 200], "scale": 24, "center": true},
+      "end_message": {"pos": [400, 200], "scale": 36, "center": true}
+    }
   }
   
