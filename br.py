@@ -26,12 +26,21 @@ def load_sprite(key, default_size=None):
             return None
     return None
 
+# Load sprites
 player_sprite = load_sprite("player_sprite", tuple(settings["player_size"]))
 obstacle_sprite = load_sprite("obstacle_sprite")
 healthy_sprite = load_sprite("healthy_sprite")
 unhealthy_sprite = load_sprite("unhealthy_sprite")
+background_sprite = load_sprite("background_sprite", (settings["screen_width"], settings["screen_height"]))
 
-# Track control flash usage: once used, show for 3 seconds then hide.
+# Draw the background: sprite if available, else solid color.
+def draw_background():
+    if background_sprite:
+        screen.blit(background_sprite, (0,0))
+    else:
+        screen.fill(settings["bg_color"])
+
+# Track control flash usage.
 controls_flash = {"jump": None, "left": None, "right": None}
 controls_display = {"jump": True, "left": True, "right": True}
 
@@ -60,7 +69,7 @@ def start_screen():
             if event.type==pygame.QUIT: pygame.quit(); sys.exit()
             if event.type==pygame.KEYDOWN and event.key==pygame.K_SPACE:
                 return
-        screen.fill(settings["bg_color"])
+        draw_background()
         draw_text("start_title", "Broccoli Runner!")
         draw_text("start_prompt", "Press spacebar to start")
         if controls_display["jump"]: draw_text("control_jump", "Jump: Spacebar")
@@ -75,7 +84,7 @@ def level_loading(level, player):
         while pygame.time.get_ticks()-start_time < 1000:
             for event in pygame.event.get():
                 if event.type==pygame.QUIT: pygame.quit(); sys.exit()
-            screen.fill(settings["bg_color"])
+            draw_background()
             draw_text("level_title", f"Level {level+1}")
             draw_text("level_countdown", f"Starting in {count} seconds")
             draw_text("level_health", f"Health: {player.health}")
@@ -108,32 +117,43 @@ def run_level(level, player):
                 controls_flash["right"] = pygame.time.get_ticks()
         now = pygame.time.get_ticks()
         for k in controls_flash:
-            if controls_flash[k] is not None and now-controls_flash[k]>3000:
+            if controls_flash[k] is not None and now - controls_flash[k] > 3000:
                 controls_display[k] = False
+        # Spawn obstacles with configurable size.
         if random.random() < obst_rate:
-            w, h = random.randint(20,70), random.randint(20,70)
+            min_w, min_h = settings["obstacle_min_size"]
+            max_w, max_h = settings["obstacle_max_size"]
+            w = random.randint(min_w, max_w)
+            h = w
             obstacles.append(pygame.Rect(settings["screen_width"], settings["screen_height"]-h, w, h))
+        # Spawn items with configurable size and vertical spawn position.
         if random.random() < item_rate:
-            typ = "healthy" if random.random()<0.5 else "unhealthy"
-            items.append({"rect": pygame.Rect(settings["screen_width"], random.randint(settings["screen_height"]-200, settings["screen_height"]-50), 20, 20), "type": typ})
-        obstacles = [o.move(-speed,0) for o in obstacles if o.right>0]
+            typ = "healthy" if random.random() < 0.5 else "unhealthy"
+            min_iw, min_ih = settings["item_min_size"]
+            max_iw, max_ih = settings["item_max_size"]
+            w = random.randint(min_iw, max_iw)
+            h = w
+            y = random.randint(settings["screen_height"]-settings["item_spawn_max_height"],
+                               settings["screen_height"]-settings["item_spawn_min_height"])
+            items.append({"rect": pygame.Rect(settings["screen_width"], y, w, h), "type": typ})
+        obstacles = [o.move(-speed, 0) for o in obstacles if o.right > 0]
         for i in items: i["rect"].x -= speed
-        items = [i for i in items if i["rect"].right>0]
+        items = [i for i in items if i["rect"].right > 0]
         player.update()
         if not player.is_invuln() and any(player.rect.colliderect(o) for o in obstacles):
             player.health -= settings["health_loss"]
-            player.invuln_timer = pygame.time.get_ticks()+settings["invuln_time"]
+            player.invuln_timer = pygame.time.get_ticks() + settings["invuln_time"]
         new_items = []
         for i in items:
             if player.rect.colliderect(i["rect"]):
                 if i["type"]=="healthy":
                     player.regen += 1
                 else:
-                    player.regen = max(0,player.regen-1)
+                    player.regen = max(0, player.regen - 1)
             else:
                 new_items.append(i)
         items = new_items
-        screen.fill(settings["bg_color"])
+        draw_background()
         for o in obstacles:
             if obstacle_sprite:
                 spr = pygame.transform.scale(obstacle_sprite, (o.width, o.height))
@@ -153,9 +173,7 @@ def run_level(level, player):
                 screen.blit(player_sprite, player.rect)
             else:
                 pygame.draw.rect(screen, settings["player_color"], player.rect)
-        # In-game HUD (kept simple)
-        hud_font = pygame.font.SysFont(None, 24)
-        hud = hud_font.render(f'Lvl {level+1}  Health: {player.health}  Regen: {player.regen}', True, (255,255,255))
+        hud = pygame.font.SysFont(None, 24).render(f'Lvl {level+1}  Health: {player.health}  Regen: {player.regen}', True, (255,255,255))
         screen.blit(hud, (10,10))
         if controls_display["jump"]: draw_text("control_jump", "Jump: Spacebar")
         if controls_display["left"]: draw_text("control_left", "Left: Arrow")
@@ -169,11 +187,11 @@ for level in range(settings["num_levels"]):
     level_loading(level, player)
     run_level(level, player)
     if player.health <= 0: break
-msg = "Game Over" if player.health<=0 else "You Win!"
+msg = "Game Over" if player.health <= 0 else "You Win!"
 while True:
     for event in pygame.event.get():
-        if event.type==pygame.QUIT: pygame.quit(); sys.exit()
-    screen.fill(settings["bg_color"])
+        if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+    draw_background()
     draw_text("end_message", msg)
     pygame.display.flip()
     clock.tick(settings["fps"])
