@@ -16,7 +16,7 @@
     "invuln_time": 2000,
     "num_levels": 10,
     "level_length": 5000,
-    "level_length_increase": 1000,
+    "level_length_increase": 2000,
     "player_speed": 3,
     "speed_increase": 0.5,
     "obstacle_spawn_rate": 0.01,
@@ -37,6 +37,9 @@
     "item_spawn_min_height": 50,
     "item_min_size": [25, 25],
     "item_max_size": [80, 80],
+    "healthy_regen_amount": 0.05,
+    "unhealthy_regen_amount": 0.05,
+    "damage_per_pixel": 0.2,
     "text": {
       "start_title": {"pos": [400, 100], "scale": 48, "center": true},
       "start_prompt": {"pos": [400, 150], "scale": 24, "center": true},

@@ -26,7 +26,7 @@ def load_sprite(key, default_size=None):
             return None
     return None
 
-# Load sprites
+# Load sprites.
 player_sprite = load_sprite("player_sprite", tuple(settings["player_size"]))
 obstacle_sprite = load_sprite("obstacle_sprite")
 healthy_sprite = load_sprite("healthy_sprite")
@@ -52,14 +52,19 @@ class Player:
         self.health = s["initial_health"]
         self.regen = s["health_regen"]
         self.invuln_timer = 0
+        self.jumps = 1  # available jumps (resets to 1 on ground)
     def jump(self):
-        self.vy = self.s["jump_strength"]
+        if self.jumps > 0:
+            self.vy = self.s["jump_strength"]
+            self.jumps -= 1
     def update(self):
         self.vy += self.s["gravity"]
         self.rect.y += int(self.vy)
-        if self.rect.bottom > self.s["screen_height"]:
+        # If on ground, reset jump count.
+        if self.rect.bottom >= self.s["screen_height"]:
             self.rect.bottom = self.s["screen_height"]
             self.vy = 0
+            self.jumps = 1
     def is_invuln(self):
         return pygame.time.get_ticks() < self.invuln_timer
 
@@ -102,7 +107,8 @@ def run_level(level, player):
         for event in pygame.event.get():
             if event.type==pygame.QUIT: pygame.quit(); sys.exit()
             if event.type==pygame.KEYDOWN:
-                if event.key==pygame.K_SPACE and player.rect.bottom>=settings["screen_height"]:
+                # Allow jump if any jumps remain (ground or extra jump)
+                if event.key==pygame.K_SPACE and player.jumps > 0:
                     player.jump()
                     if controls_display["jump"] and controls_flash["jump"] is None:
                         controls_flash["jump"] = pygame.time.get_ticks()
@@ -140,16 +146,23 @@ def run_level(level, player):
         for i in items: i["rect"].x -= speed
         items = [i for i in items if i["rect"].right > 0]
         player.update()
-        if not player.is_invuln() and any(player.rect.colliderect(o) for o in obstacles):
-            player.health -= settings["health_loss"]
-            player.invuln_timer = pygame.time.get_ticks() + settings["invuln_time"]
+        # Check for collisions with obstacles; apply damage scaled by obstacle width.
+        if not player.is_invuln():
+            colliding = [o for o in obstacles if player.rect.colliderect(o)]
+            if colliding:
+                max_width = max(o.width for o in colliding)
+                damage = max_width * settings["damage_per_pixel"]
+                player.health -= damage
+                player.invuln_timer = pygame.time.get_ticks() + settings["invuln_time"]
+        # Check collisions with items; adjust health regen and grant extra jump for healthy items.
         new_items = []
         for i in items:
             if player.rect.colliderect(i["rect"]):
                 if i["type"]=="healthy":
-                    player.regen += 1
+                    player.regen += i["rect"].width * settings["healthy_regen_amount"]
+                    player.jumps = 2  # grant an extra jump (max double jump)
                 else:
-                    player.regen = max(0, player.regen - 1)
+                    player.regen = max(0, player.regen - i["rect"].width * settings["unhealthy_regen_amount"])
             else:
                 new_items.append(i)
         items = new_items
@@ -173,7 +186,7 @@ def run_level(level, player):
                 screen.blit(player_sprite, player.rect)
             else:
                 pygame.draw.rect(screen, settings["player_color"], player.rect)
-        hud = pygame.font.SysFont(None, 24).render(f'Lvl {level+1}  Health: {player.health}  Regen: {player.regen}', True, (255,255,255))
+        hud = pygame.font.SysFont(None, 24).render(f'Lvl {level+1}  Health: {int(player.health)}  Regen: {round(player.regen,2)}', True, (255,255,255))
         screen.blit(hud, (10,10))
         if controls_display["jump"]: draw_text("control_jump", "Jump: Spacebar")
         if controls_display["left"]: draw_text("control_left", "Left: Arrow")
